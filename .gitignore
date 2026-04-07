@@ -17,6 +17,9 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Cookies and sensitive info
+cookies.txt
+
 # Temporary files
 *.tmp
 *.temp
