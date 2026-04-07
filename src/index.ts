@@ -36,6 +36,13 @@ app.post("/api/analyze", async (req: Request, res: Response) => {
     return;
   }
 
+  // Extract real URL from potentially messy input (e.g. "0.05 复制打开抖音... https://v.douyin.com/xxx ...")
+  const extractedUrl = url.match(/https?:\/\/[^\s]*(?:douyin\.com[^\s]*)/i)?.[0];
+  if (!extractedUrl) {
+    res.status(400).json({ error: "无法从输入中提取抖音链接，请确保输入包含 https://v.douyin.com/ 或 https://www.douyin.com/ 开头" });
+    return;
+  }
+
   // Set up SSE headers
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -58,7 +65,7 @@ app.post("/api/analyze", async (req: Request, res: Response) => {
 
   const result: AnalysisResult = {
     success: false,
-    url,
+    url: extractedUrl,
     analyzedAt: new Date().toISOString(),
     analysis: null,
   };
@@ -69,7 +76,7 @@ app.post("/api/analyze", async (req: Request, res: Response) => {
   try {
     // Step 1: Download
     sendProgress("download", "Starting video download...");
-    const videoMeta = await downloadVideo(url, progressCallback);
+    const videoMeta = await downloadVideo(extractedUrl, progressCallback);
     localPath = videoMeta.localPath;
     sendProgress("download", "Video downloaded successfully", {
       title: videoMeta.title,
@@ -108,9 +115,9 @@ app.post("/api/analyze", async (req: Request, res: Response) => {
   res.end();
 
   if (!result.success) {
-    console.error(`Analysis failed for ${url}: ${result.error}`);
+    console.error(`Analysis failed for ${extractedUrl}: ${result.error}`);
   } else {
-    console.log(`Analysis succeeded for ${url}`);
+    console.log(`Analysis succeeded for ${extractedUrl}`);
   }
 });
 
