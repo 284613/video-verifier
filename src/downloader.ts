@@ -26,7 +26,7 @@ export async function downloadVideo(
     const info = await ytDlp(url, {
       dumpSingleJson: true,
       noWarnings: true,
-      noCallHome: true,
+      cookiesFromBrowser: "chrome",
       preferFreeFormats: true,
     } as Parameters<typeof ytDlp>[1]);
 
@@ -48,7 +48,7 @@ export async function downloadVideo(
     format:
       "mp4/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
     noWarnings: true,
-    noCallHome: true,
+    cookiesFromBrowser: "chrome",
   } as Parameters<typeof ytDlp>[1]);
 
   const files = fs.readdirSync(tmpDir);
