@@ -1,67 +1,92 @@
-# Video Verifier — Douyin Video Analyzer with Gemini AI
+# 🎬 Video Verifier — 抖音视频 AI 分析器
 
-A single-pipeline CLI tool that downloads a Douyin (or any yt-dlp-supported) video, uploads it to Google AI, analyzes it with Gemini 1.5 Flash, outputs structured JSON, and cleans up all resources automatically.
+基于 Gemini 1.5 Flash 的抖音视频解析工具，支持 SSE 实时进度推送。
 
-## Pipeline
+## 功能特点
 
-```
-URL → yt-dlp download → Google AI upload → Gemini 1.5 Flash analysis → JSON output → cleanup
-```
+- 📥 **视频下载** — yt-dlp 异步下载抖音视频
+- ☁️ **云端上传** — Google AI File Manager 托管视频
+- 🤖 **AI 分析** — Gemini 1.5 Flash 多模态理解
+- 🧹 **自动清理** — 本地文件 + 云端缓存双重清理
+- 📊 **实时进度** — Server-Sent Events 流式推送
 
-## Setup
+## Web 界面
 
-### 1. Prerequisites
+启动服务后访问 http://localhost:3000
 
-- Node.js 18+
-- `yt-dlp` installed and on your PATH ([install guide](https://github.com/yt-dlp/yt-dlp#installation))
-- A Google Gemini API key ([get one here](https://aistudio.google.com/app/apikey))
+![Video Verifier Interface](https://img.shields.io/badge/Interface-Web-blue)
 
-### 2. Install dependencies
+## 快速开始
+
+### 1. 安装依赖
 
 ```bash
 npm install
 ```
 
-### 3. Configure environment
+### 2. 启动服务
 
 ```bash
-cp .env.example .env
-# Edit .env and set your GOOGLE_API_KEY
+npm start
 ```
 
-### 4. Run
+服务启动后，打开浏览器访问：**http://localhost:3000**
 
-```bash
-npm start <video-url>
-# e.g.
-npm start "https://www.douyin.com/video/1234567890"
+### 3. 使用
+
+1. 输入你的 Google AI API Key
+2. 粘贴抖音视频链接
+3. 点击"开始解析"
+4. 实时查看进度和最终分析结果
+
+## API 接口
+
+### POST /api/analyze
+
+分析视频并返回结果（支持 SSE 进度推送）
+
+**请求体：**
+```json
+{
+  "apiKey": "your_google_api_key",
+  "url": "https://v.douyin.com/xxxxx"
+}
 ```
 
-Progress messages are written to **stderr**. The final JSON result is written to **stdout**, so you can pipe it:
+**SSE 事件流：**
 
-```bash
-npm start "https://www.douyin.com/video/..." > result.json
-```
+- `progress` — 实时进度事件
+  ```json
+  { "stage": "download", "message": "Starting video download...", "timestamp": "..." }
+  ```
+- `result` — 最终结果
+  ```json
+  { "success": true, "url": "...", "analysis": {...} }
+  ```
 
-## Output Format
+### GET /api/health
+
+健康检查接口
+
+## 输出格式
 
 ```json
 {
   "success": true,
-  "url": "https://...",
-  "analyzedAt": "2026-04-07T00:00:00.000Z",
+  "url": "https://v.douyin.com/xxxxx",
+  "analyzedAt": "2026-04-07T...",
   "analysis": {
-    "summary": "...",
-    "mainTopics": ["topic1", "topic2"],
+    "summary": "视频内容简述",
+    "mainTopics": ["话题1", "话题2"],
     "sentiment": "positive",
-    "language": "Chinese",
+    "language": "中文",
     "hasSubtitles": false,
-    "estimatedDuration": "30 seconds",
-    "contentType": "entertainment",
+    "estimatedDuration": "30秒",
+    "contentType": "娱乐",
     "keyMoments": [
       { "timestamp": "0:05", "description": "..." }
     ],
-    "tags": ["tag1", "tag2"],
+    "tags": ["标签1", "标签2"],
     "safetyAssessment": {
       "isSafe": true,
       "concerns": [],
@@ -71,11 +96,41 @@ npm start "https://www.douyin.com/video/..." > result.json
 }
 ```
 
-On failure, `success` is `false` and an `error` field is included.
+## 前置要求
 
-## Build (optional)
+- **Node.js 18+**
+- **ffmpeg**（yt-dlp 依赖）
+  ```bash
+  # Windows: 下载并添加 PATH
+  # https://www.gyan.dev/ffmpeg/builds/
+  ```
+- **Google AI API Key**（免费申请：https://aistudio.google.com/app/apikey）
 
-```bash
-npm run build
-node dist/index.js <video-url>
+## 技术栈
+
+- Express.js — 后端服务
+- Server-Sent Events — 实时进度推送
+- TypeScript — 类型安全
+- yt-dlp-exec — 视频下载
+- @google/generative-ai — Gemini AI
+
+## 项目结构
+
 ```
+├── src/
+│   ├── index.ts           # Express 服务器入口
+│   ├── downloader.ts      # 视频下载
+│   ├── uploader.ts        # 云端上传
+│   ├── analyzer.ts        # AI 分析
+│   ├── cleanup.ts         # 资源清理
+│   ├── progressEmitter.ts  # 进度事件发射器
+│   └── types.ts           # 类型定义
+├── public/
+│   └── index.html         # Web 界面
+├── package.json
+└── README.md
+```
+
+## License
+
+MIT

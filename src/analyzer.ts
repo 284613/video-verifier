@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { UploadedFile, ContentAnalysis } from "./types.js";
+import { ProgressCallback } from "./progressEmitter.js";
 
 const MODEL_NAME = "gemini-1.5-flash";
 
@@ -26,9 +27,16 @@ const ANALYSIS_PROMPT = `Analyze this video and return a JSON object with the fo
 
 export async function analyzeVideo(
   apiKey: string,
-  uploadedFile: UploadedFile
+  uploadedFile: UploadedFile,
+  onProgress?: ProgressCallback
 ): Promise<ContentAnalysis> {
+  const progress = (msg: string, data?: any) => {
+    if (onProgress) onProgress("analyze", msg, data);
+  };
+
   const genAI = new GoogleGenerativeAI(apiKey);
+
+  progress("Initializing Gemini 1.5 Flash model...");
 
   const model = genAI.getGenerativeModel({
     model: MODEL_NAME,
@@ -37,6 +45,8 @@ export async function analyzeVideo(
       temperature: 0.2,
     },
   });
+
+  progress("Sending video to Gemini for analysis...");
 
   const result = await model.generateContent([
     {
@@ -47,6 +57,8 @@ export async function analyzeVideo(
     },
     { text: ANALYSIS_PROMPT },
   ]);
+
+  progress("Parsing analysis results...");
 
   const rawText = result.response.text().trim();
 
@@ -59,5 +71,6 @@ export async function analyzeVideo(
     );
   }
 
+  progress("Analysis complete!", parsed);
   return parsed;
 }

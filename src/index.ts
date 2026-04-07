@@ -1,24 +1,60 @@
-import * as dotenv from "dotenv";
+import express, { Request, Response } from "express";
+import cors from "cors";
+import * as path from "path";
+import { fileURLToPath } from "url";
 import { downloadVideo } from "./downloader.js";
 import { uploadVideo } from "./uploader.js";
 import { analyzeVideo } from "./analyzer.js";
 import { cleanupLocalFile, cleanupCloudFile } from "./cleanup.js";
-import { AnalysisResult } from "./types.js";
+import { AnalysisResult, ContentAnalysis } from "./types.js";
+import { emitProgress, ProgressCallback } from "./progressEmitter.js";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-async function main(): Promise<void> {
-  const url = process.argv[2];
-  if (!url) {
-    console.error("Usage: npx tsx src/index.ts <video-url>");
-    process.exit(1);
-  }
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-  const apiKey = process.env.GOOGLE_API_KEY;
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Serve static files from public folder
+app.use(express.static(path.join(__dirname, "../public")));
+
+// SSE endpoint
+app.post("/api/analyze", async (req: Request, res: Response) => {
+  const { apiKey, url } = req.body as { apiKey?: string; url?: string };
+
+  // Validate inputs
   if (!apiKey) {
-    console.error("Error: GOOGLE_API_KEY environment variable is not set.");
-    process.exit(1);
+    res.status(400).json({ error: "API key is required" });
+    return;
   }
+  if (!url) {
+    res.status(400).json({ error: "Video URL is required" });
+    return;
+  }
+
+  // Set up SSE headers
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+
+  const sendEvent = (eventName: string, data: any) => {
+    res.write(`event: ${eventName}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const sendProgress = (stage: string, message: string, data?: any) => {
+    sendEvent("progress", { stage, message, timestamp: new Date().toISOString(), data });
+  };
+
+  // Also emit to the progressEmitter for debugging/logging
+  const progressCallback: ProgressCallback = (stage, message, data) => {
+    sendProgress(stage, message, data);
+  };
 
   const result: AnalysisResult = {
     success: false,
@@ -32,47 +68,59 @@ async function main(): Promise<void> {
 
   try {
     // Step 1: Download
-    process.stderr.write(`[1/4] Downloading video from: ${url}\n`);
-    const videoMeta = await downloadVideo(url);
+    sendProgress("download", "Starting video download...");
+    const videoMeta = await downloadVideo(url, progressCallback);
     localPath = videoMeta.localPath;
-    process.stderr.write(`[1/4] Downloaded to: ${localPath}\n`);
+    sendProgress("download", "Video downloaded successfully", {
+      title: videoMeta.title,
+      localPath,
+    });
 
     // Step 2: Upload
-    process.stderr.write(`[2/4] Uploading to Google AI File Manager...\n`);
-    const uploadedFile = await uploadVideo(apiKey, localPath);
+    sendProgress("upload", "Starting cloud upload...");
+    const uploadedFile = await uploadVideo(apiKey, localPath, progressCallback);
     fileUri = uploadedFile.fileUri;
-    process.stderr.write(`[2/4] Uploaded: ${fileUri}\n`);
+    sendProgress("upload", "Video uploaded successfully", { fileUri });
 
     // Step 3: Analyze
-    process.stderr.write(`[3/4] Analyzing with Gemini 1.5 Flash...\n`);
-    const analysis = await analyzeVideo(apiKey, uploadedFile);
+    sendProgress("analyze", "Starting AI analysis...");
+    const analysis = await analyzeVideo(apiKey, uploadedFile, progressCallback);
     result.analysis = analysis;
     result.success = true;
-    process.stderr.write(`[3/4] Analysis complete.\n`);
+    sendProgress("analyze", "Analysis complete!");
   } catch (err) {
     result.error = (err as Error).message;
-    process.stderr.write(`Error: ${result.error}\n`);
+    sendProgress("error", `Error: ${result.error}`);
   } finally {
-    // Step 4: Cleanup
-    process.stderr.write(`[4/4] Cleaning up resources...\n`);
+    // Step 4: Cleanup (always runs)
+    sendProgress("cleanup", "Starting resource cleanup...");
     if (localPath) {
-      await cleanupLocalFile(localPath);
+      await cleanupLocalFile(localPath, progressCallback);
     }
     if (fileUri) {
-      await cleanupCloudFile(apiKey, fileUri);
+      await cleanupCloudFile(apiKey, fileUri, progressCallback);
     }
-    process.stderr.write(`[4/4] Cleanup complete.\n`);
+    sendProgress("cleanup", "Cleanup complete!");
   }
 
-  // Output pure JSON to stdout
-  console.log(JSON.stringify(result, null, 2));
+  // Send final result
+  sendEvent("result", result);
+  res.end();
 
   if (!result.success) {
-    process.exit(1);
+    console.error(`Analysis failed for ${url}: ${result.error}`);
+  } else {
+    console.log(`Analysis succeeded for ${url}`);
   }
-}
+});
 
-main().catch((err) => {
-  console.error("Unexpected error:", err);
-  process.exit(1);
+// Health check
+app.get("/api/health", (_req: Request, res: Response) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+app.listen(PORT, () => {
+  console.log(`🎬 Video Verifier server running at http://localhost:${PORT}`);
+  console.log(`   API endpoint: POST http://localhost:${PORT}/api/analyze`);
+  console.log(`   Web UI: http://localhost:${PORT}/index.html`);
 });
