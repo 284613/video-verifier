@@ -5,6 +5,22 @@ import * as os from "os";
 import { VideoMetadata } from "./types.js";
 import { ProgressCallback } from "./progressEmitter.js";
 
+// Read cookies from JSON and convert to header string
+function getCookiesHeader(): string {
+  try {
+    const cookies = JSON.parse(
+      fs.readFileSync("C:/Users/28443/Desktop/cookies.txt", "utf8")
+    );
+    return cookies.map((c: any) => `${c.name}=${c.value}`).join("; ");
+  } catch {
+    return "";
+  }
+}
+
+const COOKIES_HEADER = getCookiesHeader();
+const USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
 export async function downloadVideo(
   url: string,
   onProgress?: ProgressCallback
@@ -26,7 +42,10 @@ export async function downloadVideo(
     const info = await ytDlp(url, {
       dumpSingleJson: true,
       noWarnings: true,
-      cookiesFromBrowser: "chrome",
+      addHeaders: {
+        Cookie: COOKIES_HEADER,
+        "User-Agent": USER_AGENT,
+      },
       preferFreeFormats: true,
     } as Parameters<typeof ytDlp>[1]);
 
@@ -48,7 +67,10 @@ export async function downloadVideo(
     format:
       "mp4/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
     noWarnings: true,
-    cookiesFromBrowser: "chrome",
+    addHeaders: {
+      Cookie: COOKIES_HEADER,
+      "User-Agent": USER_AGENT,
+    },
   } as Parameters<typeof ytDlp>[1]);
 
   const files = fs.readdirSync(tmpDir);
