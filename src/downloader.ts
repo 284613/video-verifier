@@ -14,7 +14,8 @@ export async function downloadVideo(
   };
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "video-verifier-"));
-  const outputTemplate = path.join(tmpDir, "%(id)s.%(ext)s");
+  // yt-dlp requires forward slashes in output template on Windows
+  const outputTemplate = `${tmpDir.replace(/\\/g, "/")}/%(id)s.%(ext)s`;
 
   progress("Fetching video metadata...");
 
